@@ -4,22 +4,13 @@ document.getElementById('cve-form').addEventListener('submit', async (event) => 
     const resultsDiv = document.getElementById('results');
     resultsDiv.innerHTML = '<p>Loading...</p>';
 
-    // GitHub Personal Access Token
-    const GITHUB_TOKEN = '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';
-    const headers = { Authorization: `token ${GITHUB_TOKEN}` };
-
     try {
-        // Fetch the list of CVEs from your GitHub repository
-        const response = await fetch('https://api.github.com/repos/robbedell/cvelistV5/contents/cves', { headers });
-        if (!response.ok) throw new Error(`Failed to fetch CVEs: ${response.statusText}`);
-        const data = await response.json();
-
-        // Find the specific CVE file
-        const cveFile = data.find((item) => item.name.includes(cveInput));
-        if (!cveFile) throw new Error('CVE not found in the repository');
+        // Use the raw content URL to fetch the list of CVEs
+        const baseUrl = 'https://raw.githubusercontent.com/robbedell/cvelistV5/main/cves/';
+        const cveFileUrl = `${baseUrl}${cveInput}.json`;
 
         // Fetch the CVE details
-        const cveResponse = await fetch(cveFile.download_url, { headers });
+        const cveResponse = await fetch(cveFileUrl);
         if (!cveResponse.ok) throw new Error(`Failed to fetch CVE details for ${cveInput}: ${cveResponse.statusText}`);
         const cveData = await cveResponse.json();
 
@@ -39,27 +30,19 @@ document.getElementById('cve-form').addEventListener('submit', async (event) => 
     }
 });
 
-// Fetch and display recent CVEs
 async function fetchRecentCVEs() {
     const recentCveList = document.getElementById('recent-cve-list');
     recentCveList.innerHTML = '<li>Loading...</li>';
 
-    // GitHub Personal Access Token
-    const GITHUB_TOKEN = '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';
-    const headers = { Authorization: `token ${GITHUB_TOKEN}` };
-
     try {
-        // Fetch the list of recent CVEs from your GitHub repository
-        const response = await fetch('https://api.github.com/repos/robbedell/cvelistV5/contents/cves', { headers });
-        if (!response.ok) throw new Error(`Failed to fetch recent CVEs: ${response.statusText}`);
-        const data = await response.json();
+        // Use the raw content URL to fetch the list of recent CVEs
+        const baseUrl = 'https://raw.githubusercontent.com/robbedell/cvelistV5/main/cves/';
+        const cveFiles = ['cve1.json', 'cve2.json', 'cve3.json', 'cve4.json', 'cve5.json']; // Example file names
 
-        // Extract and display the most recent CVEs
         recentCveList.innerHTML = '';
-        const recentCves = data.slice(0, 5); // Get the 5 most recent CVEs
-        for (const cve of recentCves) {
-            const cveResponse = await fetch(cve.download_url, { headers });
-            if (!cveResponse.ok) throw new Error(`Failed to fetch CVE details for ${cve.name}: ${cveResponse.statusText}`);
+        for (const fileName of cveFiles) {
+            const cveResponse = await fetch(`${baseUrl}${fileName}`);
+            if (!cveResponse.ok) throw new Error(`Failed to fetch CVE details for ${fileName}: ${cveResponse.statusText}`);
             const cveData = await cveResponse.json();
 
             const cveId = cveData.cveMetadata.cveId;
