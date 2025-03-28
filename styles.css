@@ -51,3 +51,20 @@ button:hover {
     border: 1px solid #ddd;
     border-radius: 5px;
 }
+
+#recent-cves {
+    margin-top: 2rem;
+    padding: 1rem;
+    background-color: #eef;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+#recent-cve-list {
+    list-style-type: none;
+    padding: 0;
+}
+
+#recent-cve-list li {
+    margin-bottom: 0.5rem;
+}
