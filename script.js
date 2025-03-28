@@ -56,5 +56,30 @@ async function fetchRecentCVEs() {
     }
 }
 
-// Call fetchRecentCVEs on page load
-document.addEventListener('DOMContentLoaded', fetchRecentCVEs);
+async function populateCveSuggestions() {
+    const cveSuggestions = document.getElementById('cve-suggestions');
+
+    try {
+        // Use the raw content URL to fetch the list of CVEs
+        const baseUrl = 'https://raw.githubusercontent.com/robbedell/cvelistV5/main/cves/';
+        const response = await fetch(`${baseUrl}index.json`); // Assume an index.json file listing all CVEs
+        if (!response.ok) throw new Error('Failed to fetch CVE index');
+        const cveList = await response.json();
+
+        // Populate the datalist with CVE numbers
+        cveSuggestions.innerHTML = '';
+        cveList.forEach((cve) => {
+            const option = document.createElement('option');
+            option.value = cve;
+            cveSuggestions.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error populating CVE suggestions:', error);
+    }
+}
+
+// Call fetchRecentCVEs and populateCveSuggestions on page load
+document.addEventListener('DOMContentLoaded', () => {
+    fetchRecentCVEs();
+    populateCveSuggestions();
+});

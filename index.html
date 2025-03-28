@@ -13,7 +13,10 @@
     <main>
         <form id="cve-form">
             <label for="cve-input">Enter CVE Number:</label>
-            <input type="text" id="cve-input" placeholder="e.g., CVE-2023-12345" required>
+            <input type="text" id="cve-input" placeholder="e.g., CVE-2023-12345" required list="cve-suggestions">
+            <datalist id="cve-suggestions">
+                <!-- Suggestions will be dynamically populated -->
+            </datalist>
             <button type="submit">Search</button>
         </form>
         <div id="results">
