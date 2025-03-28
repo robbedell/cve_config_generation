@@ -5,7 +5,7 @@ document.getElementById('cve-form').addEventListener('submit', async (event) => 
     resultsDiv.innerHTML = '<p>Loading...</p>';
 
     try {
-        // Use the raw content URL to fetch the list of CVEs
+        // Use the raw content URL to fetch the CVE details
         const baseUrl = 'https://raw.githubusercontent.com/robbedell/cvelistV5/main/cves/';
         const cveFileUrl = `${baseUrl}${cveInput}.json`;
 
