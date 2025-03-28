@@ -5,20 +5,16 @@ document.getElementById('cve-form').addEventListener('submit', async (event) => 
     resultsDiv.innerHTML = '<p>Loading...</p>';
 
     try {
-        // Use the raw content URL to fetch the CVE details
         const baseUrl = 'https://raw.githubusercontent.com/robbedell/cvelistV5/main/cves/';
         const cveFileUrl = `${baseUrl}${cveInput}.json`;
 
-        // Fetch the CVE details
         const cveResponse = await fetch(cveFileUrl);
         if (!cveResponse.ok) throw new Error(`Failed to fetch CVE details for ${cveInput}: ${cveResponse.statusText}`);
         const cveData = await cveResponse.json();
 
-        // Extract relevant CVE information
         const cveId = cveData.cveMetadata.cveId;
         const description = cveData.containers.cna.descriptions[0]?.value || 'No description available';
 
-        // Display CVE information
         resultsDiv.innerHTML = `
             <h2>Results for ${cveId}</h2>
             <p><strong>Description:</strong> ${description}</p>
@@ -35,9 +31,8 @@ async function fetchRecentCVEs() {
     recentCveList.innerHTML = '<li>Loading...</li>';
 
     try {
-        // Use the raw content URL to fetch the list of recent CVEs
         const baseUrl = 'https://raw.githubusercontent.com/robbedell/cvelistV5/main/cves/';
-        const cveFiles = ['cve1.json', 'cve2.json', 'cve3.json', 'cve4.json', 'cve5.json']; // Example file names
+        const cveFiles = ['cve1.json', 'cve2.json', 'cve3.json', 'cve4.json', 'cve5.json'];
 
         recentCveList.innerHTML = '';
         for (const fileName of cveFiles) {
@@ -60,13 +55,11 @@ async function populateCveSuggestions() {
     const cveSuggestions = document.getElementById('cve-suggestions');
 
     try {
-        // Use the raw content URL to fetch the list of CVEs
         const baseUrl = 'https://raw.githubusercontent.com/robbedell/cvelistV5/main/cves/';
-        const response = await fetch(`${baseUrl}index.json`); // Assume an index.json file listing all CVEs
+        const response = await fetch(`${baseUrl}index.json`);
         if (!response.ok) throw new Error('Failed to fetch CVE index');
         const cveList = await response.json();
 
-        // Populate the datalist with CVE numbers
         cveSuggestions.innerHTML = '';
         cveList.forEach((cve) => {
             const option = document.createElement('option');
@@ -78,7 +71,6 @@ async function populateCveSuggestions() {
     }
 }
 
-// Call fetchRecentCVEs and populateCveSuggestions on page load
 document.addEventListener('DOMContentLoaded', () => {
     fetchRecentCVEs();
     populateCveSuggestions();
