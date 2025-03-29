@@ -1,7 +1,28 @@
-// CVE data handling
-let recentCves = [];
+// State management
+let currentCVE = null;
+let recentCVEs = [];
+let cveCache = new Map();
 
-// Function to parse CVE ID and get GitHub raw content URL
+// Repository Configuration
+const CVE_REPO_BASE_URL = 'https://raw.githubusercontent.com/RobBedell/cvelistV5/main/cves';
+
+// DOM Elements
+const cveForm = document.getElementById('cve-form');
+const cveInput = document.getElementById('cve-input');
+const resultsDiv = document.getElementById('results');
+const recentCveList = document.getElementById('recent-cve-list');
+const tabButtons = document.querySelectorAll('.tab-button');
+const configPanels = document.querySelectorAll('.config-panel');
+const copyButtons = document.querySelectorAll('.copy-button');
+
+// Event Listeners
+cveForm.addEventListener('submit', handleSearch);
+tabButtons.forEach(button => button.addEventListener('click', handleTabChange));
+copyButtons.forEach(button => button.addEventListener('click', handleCopy));
+
+// Load recent CVEs from localStorage
+loadRecentCVEs();
+
 function getCveGitHubUrl(cveId) {
     const match = cveId.match(/CVE-(\d{4})-(\d+)/);
     if (!match) return null;
@@ -10,141 +31,391 @@ function getCveGitHubUrl(cveId) {
     const number = match[2];
     const prefix = number.substring(0, 1) + 'xxx';
 
-    return `https://raw.githubusercontent.com/robbedell/cvelistV5/main/cves/${year}/${prefix}/${cveId}.json`;
+    return `${CVE_REPO_BASE_URL}/${year}/${prefix}/${cveId}.json`;
 }
 
-// Function to fetch CVE data
-async function fetchCveData(cveId) {
-    const fileUrl = getCveGitHubUrl(cveId);
-    if (!fileUrl) {
-        throw new Error('Invalid CVE ID format');
-    }
-
-    console.log('Attempting to fetch CVE from:', fileUrl);
+async function fetchCVEById(cveId) {
     try {
-        const response = await fetch(fileUrl);
-        console.log('Response status:', response.status);
-        if (!response.ok) {
-            throw new Error(`CVE not found (Status: ${response.status})`);
+        if (cveCache.has(cveId)) {
+            return cveCache.get(cveId);
         }
+
+        const fileUrl = getCveGitHubUrl(cveId);
+        if (!fileUrl) {
+            throw new Error('Invalid CVE ID format');
+        }
+
+        const response = await fetch(fileUrl);
+        if (!response.ok) {
+            throw new Error(`CVE not found: ${response.status}`);
+        }
+
         const data = await response.json();
-        console.log('Successfully fetched CVE data');
-        return data;
+        const cna = data.containers.cna;
+
+        const description = cna.descriptions?.find(d => d.lang === 'en')?.value ||
+                          cna.descriptions?.[0]?.value ||
+                          'No description available';
+
+        // Determine severity from problem types
+        let severity = 'UNKNOWN';
+        if (cna.problemTypes) {
+            const hasCritical = cna.problemTypes.some(pt =>
+                pt.descriptions.some(d => d.description.includes('Critical'))
+            );
+            const hasHigh = cna.problemTypes.some(pt =>
+                pt.descriptions.some(d => d.description.includes('High'))
+            );
+
+            if (hasCritical) severity = 'CRITICAL';
+            else if (hasHigh) severity = 'HIGH';
+            else severity = 'MEDIUM';
+        }
+
+        const result = {
+            id: cveId,
+            title: cna.title || 'No title available',
+            description: description,
+            severity: severity,
+            references: cna.references?.map(ref => ref.url) || [],
+            affected: cna.affected?.map(item => ({
+                product: item.product,
+                vendor: item.vendor,
+                status: item.defaultStatus,
+                versions: item.versions
+            })) || [],
+            metrics: data.containers.metrics || [],
+            problemTypes: cna.problemTypes || []
+        };
+
+        cveCache.set(cveId, result);
+        return result;
     } catch (error) {
-        console.error('Error fetching CVE:', error);
+        console.error('Error in fetchCVEById:', error);
         throw error;
     }
 }
 
-// Function to display CVE information
-function displayCveInfo(cveData) {
-    const resultsDiv = document.getElementById('results');
-    const cna = cveData.containers.cna;
+async function handleSearch(e) {
+    e.preventDefault();
+    showLoading();
 
-    const html = `
-        <div class="cve-info">
-            <h2>${cveData.cveMetadata.cveId}</h2>
-            <div class="metadata">
-                <p><strong>Published:</strong> ${new Date(cveData.cveMetadata.datePublished).toLocaleDateString()}</p>
-                <p><strong>Last Updated:</strong> ${new Date(cveData.cveMetadata.dateUpdated).toLocaleDateString()}</p>
-                <p><strong>Status:</strong> ${cveData.cveMetadata.state}</p>
+    try {
+        const cveId = cveInput.value.trim();
+        if (!cveId) {
+            showError('Please enter a CVE ID');
+            return;
+        }
+
+        const cveData = await fetchCVEById(cveId);
+        displayResults(cveData);
+    } catch (error) {
+        console.error('Search error:', error);
+        showError('Failed to fetch CVE data. Please try again.');
+    } finally {
+        hideLoading();
+    }
+}
+
+function displayResults(cveData) {
+    if (!cveData) {
+        resultsDiv.innerHTML = `
+            <div class="error-message">
+                <p>No CVE data found. Please try a different search.</p>
             </div>
-            <div class="description">
-                <h3>Description</h3>
-                <p>${cna.descriptions[0].value}</p>
+        `;
+        return;
+    }
+
+    const { id, title, description, severity, affected, references, metrics } = cveData;
+    const cvssScore = metrics?.[0]?.cvssV3_1?.baseScore || 'N/A';
+
+    const resultsHTML = `
+        <div class="cve-details">
+            <div class="cve-header">
+                <h2>${id}</h2>
+                <span class="severity-badge ${severity.toLowerCase()}">${severity}</span>
+                <span class="cvss-score">CVSS Score: ${cvssScore}</span>
             </div>
-            <div class="affected">
-                <h3>Affected Products</h3>
+
+            <div class="cve-title">
+                <h3>${title}</h3>
+            </div>
+
+            <div class="cve-description">
+                <h4>Description</h4>
+                <p>${description}</p>
+            </div>
+
+            <div class="cve-affected">
+                <h4>Affected Products</h4>
                 <ul>
-                    ${cna.affected.map(aff => `
+                    ${affected.map(item => `
                         <li>
-                            <strong>${aff.vendor} - ${aff.product}</strong>
-                            <ul>
-                                ${aff.versions.map(ver => `
-                                    <li>Version ${ver.version} (${ver.status})</li>
-                                `).join('')}
-                            </ul>
+                            <strong>${item.vendor}</strong> - ${item.product}
+                            ${item.versions ? `
+                                <ul>
+                                    ${item.versions.map(v => `
+                                        <li>Version: ${v.version} (Status: ${v.status})</li>
+                                    `).join('')}
+                                </ul>
+                            ` : ''}
                         </li>
                     `).join('')}
                 </ul>
             </div>
-            <div class="metrics">
-                <h3>CVSS Metrics</h3>
-                ${cna.metrics.map(metric => {
-                    const version = Object.keys(metric)[0];
-                    const data = metric[version];
-                    return `
-                        <div class="metric">
-                            <h4>CVSS ${data.version}</h4>
-                            <p><strong>Score:</strong> ${data.baseScore}</p>
-                            <p><strong>Vector:</strong> ${data.vectorString}</p>
-                            <p><strong>Severity:</strong> ${data.baseSeverity}</p>
-                        </div>
-                    `;
-                }).join('')}
-            </div>
-            <div class="references">
-                <h3>References</h3>
-                <ul>
-                    ${cna.references.map(ref => `
-                        <li><a href="${ref.url}" target="_blank">${ref.url}</a></li>
-                    `).join('')}
-                </ul>
-            </div>
+
+            ${references.length > 0 ? `
+                <div class="cve-references">
+                    <h4>References</h4>
+                    <ul>
+                        ${references.map(ref => `
+                            <li><a href="${ref}" target="_blank">${ref}</a></li>
+                        `).join('')}
+                    </ul>
+                </div>
+            ` : ''}
+
+            ${metrics.length > 0 ? `
+                <div class="cve-metrics">
+                    <h4>Metrics</h4>
+                    <ul>
+                        ${metrics.map(metric => `
+                            <li>
+                                <strong>${metric.type}</strong>
+                                ${metric.cvssV3_1 ? `
+                                    <ul>
+                                        <li>Base Score: ${metric.cvssV3_1.baseScore}</li>
+                                        <li>Vector: ${metric.cvssV3_1.vectorString}</li>
+                                    </ul>
+                                ` : ''}
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            ` : ''}
         </div>
     `;
 
-    resultsDiv.innerHTML = html;
+    resultsDiv.innerHTML = resultsHTML;
+    generateConfigurations(cveData);
+    addToRecentCVEs(id);
+}
 
-    // Add to recent CVEs if not already present
-    if (!recentCves.includes(cveData.cveMetadata.cveId)) {
-        recentCves.unshift(cveData.cveMetadata.cveId);
-        if (recentCves.length > 10) {
-            recentCves.pop();
+function generateConfigurations(cveData) {
+    if (!cveData) return;
+
+    const paloAltoConfig = generatePaloAltoConfig(cveData);
+    const ciscoConfig = generateCiscoConfig(cveData);
+    const fortinetConfig = generateFortinetConfig(cveData);
+
+    document.querySelector('#palo-alto-config .config-code').textContent = paloAltoConfig;
+    document.querySelector('#cisco-config .config-code').textContent = ciscoConfig;
+    document.querySelector('#fortinet-config .config-code').textContent = fortinetConfig;
+}
+
+function generatePaloAltoConfig(cveData) {
+    const { id, description, severity, affected, references } = cveData;
+    const severityMap = {
+        'CRITICAL': 'critical',
+        'HIGH': 'high',
+        'MEDIUM': 'medium',
+        'LOW': 'low',
+        'UNKNOWN': 'medium'
+    };
+
+    return [
+        `# Palo Alto Networks Security Configuration for ${id}`,
+        `# Generated based on CVE information`,
+        '',
+        `# Security Profile Configuration`,
+        `set security profiles vulnerability-protection profile "${id}_profile"`,
+        `set security profiles vulnerability-protection profile "${id}_profile" rules "${id}_rule" action "${severityMap[severity] || 'medium'}"`,
+        '',
+        `# Threat Prevention Configuration`,
+        `set security profiles threat-prevention profile "${id}_threat_profile"`,
+        `set security profiles threat-prevention profile "${id}_threat_profile" rules "${id}_threat_rule" action "${severityMap[severity] || 'medium'}"`,
+        '',
+        `# Affected Products`,
+        ...affected.map(item => `# ${item.vendor} - ${item.product}`),
+        '',
+        `# References`,
+        ...references.map(ref => `# ${ref}`),
+        '',
+        `# Description`,
+        `# ${description.replace(/\n/g, '\n# ')}`
+    ].join('\n');
+}
+
+function generateCiscoConfig(cveData) {
+    const { id, description, severity, affected, references } = cveData;
+    const severityMap = {
+        'CRITICAL': 'critical',
+        'HIGH': 'high',
+        'MEDIUM': 'medium',
+        'LOW': 'low',
+        'UNKNOWN': 'medium'
+    };
+
+    return [
+        `! Cisco Security Configuration for ${id}`,
+        `! Generated based on CVE information`,
+        '',
+        `! Object Group for Affected Products`,
+        `object-group network ${id}_affected_products`,
+        ...affected.map(item => ` network-object host ${item.product}`),
+        '',
+        `! Access Control List`,
+        `ip access-list extended ${id}_acl`,
+        ` permit ip any ${id}_affected_products`,
+        '',
+        `! Class Map for Traffic Classification`,
+        `class-map match-all ${id}_class`,
+        ` match access-group name ${id}_acl`,
+        '',
+        `! Policy Map for Traffic Handling`,
+        `policy-map ${id}_policy`,
+        ` class ${id}_class`,
+        `  set dscp ${severityMap[severity] || 'medium'}`,
+        '',
+        `! Service Policy Application`,
+        `service-policy ${id}_policy global`,
+        '',
+        `! References`,
+        ...references.map(ref => `! ${ref}`),
+        '',
+        `! Description`,
+        `! ${description.replace(/\n/g, '\n! ')}`
+    ].join('\n');
+}
+
+function generateFortinetConfig(cveData) {
+    const { id, description, severity, affected, references } = cveData;
+    const severityMap = {
+        'CRITICAL': 'critical',
+        'HIGH': 'high',
+        'MEDIUM': 'medium',
+        'LOW': 'low',
+        'UNKNOWN': 'medium'
+    };
+
+    return [
+        `# Fortinet Security Configuration for ${id}`,
+        `# Generated based on CVE information`,
+        '',
+        `# Vulnerability Protection Profile`,
+        `config ips global`,
+        `    set signature-auto-update enable`,
+        `    set signature-update-interval 1`,
+        `end`,
+        '',
+        `config ips sensor`,
+        `    edit "${id}_sensor"`,
+        `        set comment "${description}"`,
+        `        config entries`,
+        `            edit 0`,
+        `                set severity ${severityMap[severity] || 'medium'}`,
+        `                set status enable`,
+        `                set action block`,
+        `            next`,
+        `        end`,
+        `    next`,
+        `end`,
+        '',
+        `# Affected Products`,
+        ...affected.map(item => `# ${item.vendor} - ${item.product}`),
+        '',
+        `# References`,
+        ...references.map(ref => `# ${ref}`),
+        '',
+        `# Description`,
+        `# ${description.replace(/\n/g, '\n# ')}`
+    ].join('\n');
+}
+
+function handleTabChange(e) {
+    const targetTab = e.target.dataset.tab;
+
+    tabButtons.forEach(button => button.classList.remove('active'));
+    e.target.classList.add('active');
+
+    configPanels.forEach(panel => {
+        panel.classList.remove('active');
+        if (panel.id === `${targetTab}-config`) {
+            panel.classList.add('active');
         }
-        updateRecentCvesList();
+    });
+}
+
+function handleCopy(e) {
+    const configCode = e.target.previousElementSibling.textContent;
+    navigator.clipboard.writeText(configCode).then(() => {
+        showSuccess('Configuration copied to clipboard!');
+    }).catch(() => {
+        showError('Failed to copy configuration');
+    });
+}
+
+function loadRecentCVEs() {
+    const saved = localStorage.getItem('recentCVEs');
+    if (saved) {
+        recentCVEs = JSON.parse(saved);
+        updateRecentCVEsList();
     }
 }
 
-// Function to update recent CVEs list
-function updateRecentCvesList() {
-    const recentList = document.getElementById('recent-cve-list');
-    recentList.innerHTML = recentCves.map(cveId => `
-        <li><a href="#" class="recent-cve" data-cve="${cveId}">${cveId}</a></li>
-    `).join('');
+function addToRecentCVEs(cveId) {
+    if (!recentCVEs.includes(cveId)) {
+        recentCVEs.unshift(cveId);
+        if (recentCVEs.length > 10) {
+            recentCVEs.pop();
+        }
+        localStorage.setItem('recentCVEs', JSON.stringify(recentCVEs));
+        updateRecentCVEsList();
+    }
+}
 
-    // Add click handlers to recent CVE links
+function updateRecentCVEsList() {
+    recentCveList.innerHTML = recentCVEs
+        .map(cveId => `
+            <li>
+                <a href="#" class="recent-cve" data-cve="${cveId}">${cveId}</a>
+            </li>
+        `).join('');
+
     document.querySelectorAll('.recent-cve').forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
-            const cveId = e.target.dataset.cve;
-            document.getElementById('cve-input').value = cveId;
-            handleCveSearch(cveId);
+            cveInput.value = e.target.dataset.cve;
+            cveForm.dispatchEvent(new Event('submit'));
         });
     });
 }
 
-// Function to handle CVE search
-async function handleCveSearch(cveId) {
-    try {
-        const cveData = await fetchCveData(cveId);
-        displayCveInfo(cveData);
-    } catch (error) {
-        const resultsDiv = document.getElementById('results');
-        resultsDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
-    }
+// UI Helper Functions
+function showLoading() {
+    resultsDiv.innerHTML = '<div class="loading">Loading...</div>';
 }
 
-// Event listeners
-document.addEventListener('DOMContentLoaded', () => {
-    const form = document.getElementById('cve-form');
-    const input = document.getElementById('cve-input');
+function hideLoading() {
+    // Loading state is cleared when results are displayed
+}
 
-    form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const cveId = input.value.trim();
-        if (cveId) {
-            handleCveSearch(cveId);
-        }
-    });
-});
+function showError(message) {
+    resultsDiv.innerHTML = `
+        <div class="error-message">
+            <p>${message}</p>
+        </div>
+    `;
+}
+
+function showSuccess(message) {
+    const notification = document.createElement('div');
+    notification.className = 'success';
+    notification.textContent = message;
+    document.body.appendChild(notification);
+
+    setTimeout(() => {
+        notification.remove();
+    }, 3000);
+}

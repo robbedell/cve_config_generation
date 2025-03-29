@@ -3,29 +3,75 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CVE Research Tool</title>
+    <title>CVE Configuration Generator</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <header>
-        <h1>CVE Research Tool</h1>
+        <h1>CVE Configuration Generator</h1>
+        <p class="subtitle">Generate security configurations based on CVE information</p>
     </header>
+
     <main>
-        <form id="cve-form">
-            <label for="cve-input">Enter CVE Number:</label>
-            <input type="text" id="cve-input" placeholder="e.g., CVE-2023-12345" required list="cve-suggestions">
-            <datalist id="cve-suggestions"></datalist>
-            <button type="submit">Search</button>
-        </form>
-        <div id="results"></div>
-        <div id="recent-cves">
-            <h2>Recent CVEs</h2>
-            <ul id="recent-cve-list"></ul>
+        <div class="container">
+            <section class="search-section">
+                <form id="cve-form">
+                    <div class="search-group">
+                        <div class="input-group">
+                            <input type="text" id="cve-input" placeholder="Enter CVE ID (e.g., CVE-2024-1000)" required>
+                            <button type="submit" class="primary-button">Search</button>
+                        </div>
+                    </div>
+                </form>
+            </section>
+
+            <section class="results-section">
+                <div id="results">
+                    <div class="results-placeholder">
+                        <p>Enter a CVE ID to view details and generate configurations</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="config-section">
+                <h2>Generated Configurations</h2>
+                <div class="config-tabs">
+                    <button class="tab-button active" data-tab="palo-alto">Palo Alto</button>
+                    <button class="tab-button" data-tab="cisco">Cisco</button>
+                    <button class="tab-button" data-tab="fortinet">Fortinet</button>
+                </div>
+                <div class="config-content">
+                    <div id="palo-alto-config" class="config-panel active">
+                        <pre class="config-code"></pre>
+                        <button class="copy-button">Copy Configuration</button>
+                    </div>
+                    <div id="cisco-config" class="config-panel">
+                        <pre class="config-code"></pre>
+                        <button class="copy-button">Copy Configuration</button>
+                    </div>
+                    <div id="fortinet-config" class="config-panel">
+                        <pre class="config-code"></pre>
+                        <button class="copy-button">Copy Configuration</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="recent-section">
+                <h2>Recent CVEs</h2>
+                <div class="recent-cves-container">
+                    <ul id="recent-cve-list"></ul>
+                </div>
+            </section>
         </div>
     </main>
+
     <footer>
-        <p>Powered by GitHub Pages</p>
+        <div class="footer-content">
+            <p>Powered by GitHub Pages</p>
+            <p class="version">Version 1.0.0</p>
+        </div>
     </footer>
+
     <script src="script.js"></script>
 </body>
 </html>
